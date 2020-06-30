@@ -7,6 +7,7 @@ import datetime
 import enum
 import logging
 import os
+import linecache
 
 from typing import Dict, List, Iterator
 
@@ -51,6 +52,9 @@ class PropertyData(enum.Enum):
     ZONE_CODE = 'Zone_Code'
     ZONE = 'Zone'
     ZONE_TYPE = 'Zone_Class'
+
+    # legal parcel id
+    LEGAL_PARCEL_ID = 'Legal_Parcel_Id'
 
     # pylint: enable=invalid-name
 
@@ -123,23 +127,40 @@ class PropertyFile():
         """Check if File line is of interest."""
         raise NotImplementedError
 
+    def get_legal_parcel_id(self, next_line) -> list:
+        """Returns legal parcel id if it is within arg line"""
+        try:
+            if next_line.upper().startswith('C'):
+                fields = split_str(next_line, ';')
+                return fields[5]
+            else:
+                return None
+        except IndexError:
+            return None
+
     def parse(self) -> None:
         """Parse the property file."""
         with open(self._file_path, 'r', encoding=self._encoding) as prop_file:
             for idx, raw_line in enumerate(prop_file, start=1):
+
                 line = raw_line.strip()
+                next_line = linecache.getline(self._file_path, idx + 1)
                 if self.line_of_interest(line):
                     # For now let's assume we only need a single line for each
                     # property. New NSW entries have multiple lines per
                     # property but only 1 has data we are interested in
                     # single line makes parsing a lot simpler for now
                     prop = self.create_property_from_line(line)
+                    lpid = self.get_legal_parcel_id(next_line)
                     if prop.parse():
                         prop[PropertyData.FILE_NAME] = self._file_name
                         prop[PropertyData.LINE_NO] = str(idx)
+                        prop[PropertyData.LEGAL_PARCEL_ID] = lpid
                         self._properties.append(prop)
                     else:
                         raise ValueError(F'Failed Parsing Line: "{line}"')
+
+
 
     def get_lines_as_list(self) -> List[Dict[str, str]]:
         """Get a list of all the properties."""
